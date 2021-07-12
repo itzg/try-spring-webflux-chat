@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Chat</title>
+</head>
+<script>
+var ws;
+
+function enterRoom() {
+    const roomName = document.getElementById("roomName").value;
+
+    document.getElementById("roomControls").className = "hidden";
+    document.getElementById("chatControls").className = "";
+    document.getElementById("content").className = "";
+
+    const contentArea = document.getElementById("content");
+
+    ws = new WebSocket(`ws://${window.location.hostname}:${window.location.port}/chat`);
+    ws.onopen = (evt) => {
+        ws.send(`SUB ${roomName}`);
+    }
+    ws.onmessage = (evt) => {
+        const row = document.createElement("div");
+        row.innerText = evt.data;
+        contentArea.append(row);
+    }
+}
+
+function send() {
+    let field = document.getElementById("message");
+    const msg = field.value;
+    field.value = "";
+    ws.send(`MSG ${msg}`);
+}
+
+</script>
+<style>
+    .hidden {
+        display: none;
+    }
+
+    #content {
+        border: thin solid black;
+        margin-top: 10px;
+        padding: 5px;
+    }
+</style>
+<body>
+
+<div id="roomControls">
+    <label for="roomName">Room:</label>
+    <input type="text" id="roomName" placeholder="Chat room"/>
+    <button onclick="enterRoom()">Enter</button>
+</div>
+<div id="chatControls" class="hidden">
+    <label for="message">Message:</label>
+    <input type="text" id="message" onchange="send()"/>
+    <button onclick="send()">Send</button>
+</div>
+<div id="content" class="hidden">
+
+</div>
+</body>
+</html>
