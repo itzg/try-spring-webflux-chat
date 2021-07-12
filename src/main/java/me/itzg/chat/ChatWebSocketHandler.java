@@ -24,7 +24,9 @@ public class ChatWebSocketHandler implements WebSocketHandler {
 
         return session.receive()
                 .map(WebSocketMessage::getPayloadAsText)
+                // ignore messages until a subscription shows up
                 .skipUntil(msg -> msg.startsWith("SUB "))
+                // ...and process that subscription and content after it
                 .switchOnFirst((signal, f) -> {
                     if (signal.hasValue()) {
                         final String subMsg = signal.get();
@@ -33,16 +35,20 @@ public class ChatWebSocketHandler implements WebSocketHandler {
                             final String roomName = parts[1];
                             log.info("Got subscription for room={}", roomName);
 
+                            // get or create the room's multicasting sink
                             final Sinks.Many<String> sink = rooms.computeIfAbsent(roomName, unused ->
                                     Sinks.many().multicast().directBestEffort()
                             );
 
                             final Mono<Void> input = f
+                                    // messages only
                                     .filter(s -> s.startsWith("MSG "))
                                     .map(s -> s.substring(4))
+                                    // emit to the room's sink
                                     .doOnNext(msg -> sink.emitNext(msg, Sinks.EmitFailureHandler.FAIL_FAST))
                                     .then();
 
+                            // tie together completion of receiving flux and the sending from room sink
                             return Mono.zip(
                                     input,
                                     session.send(
@@ -52,8 +58,11 @@ public class ChatWebSocketHandler implements WebSocketHandler {
                             );
                         }
                     }
-                    return Mono.empty();
+                    log.warn("Websocket started out without a value");
+                    // ignore the incoming content and turn into a completion mono
+                    return f.then();
                 })
+                // switch back to a Mono<Void> to let websocket wait for completion
                 .then();
     }
 }
